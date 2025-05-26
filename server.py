@@ -8,9 +8,56 @@ from sqlalchemy import and_
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 import contextlib
+from functools import wraps # For decorator
+import os # For environment variables
+import json # For parsing API keys from env
+from dotenv import load_dotenv # For .env file
+
+load_dotenv() # Load variables from .env file first
 
 app = Flask(__name__)
 CORS(app)
+
+# --- API Key Authentication (from .env file) ---
+VALID_API_KEYS_JSON = os.environ.get('VALID_API_KEYS_JSON')
+VALID_API_KEYS = {} # Default to empty if not set or invalid
+
+print(f"[DEBUG] Initial VALID_API_KEYS_JSON from env: '{VALID_API_KEYS_JSON}'")
+
+if VALID_API_KEYS_JSON:
+    try:
+        VALID_API_KEYS = json.loads(VALID_API_KEYS_JSON)
+        if not isinstance(VALID_API_KEYS, dict):
+            print("Error: VALID_API_KEYS_JSON in .env did not parse into a dictionary. API key auth might not work as expected.")
+            VALID_API_KEYS = {} # Reset if not a dict
+    except json.JSONDecodeError:
+        print("Error: VALID_API_KEYS_JSON in .env is not valid JSON. API key auth might not work as expected.")
+        VALID_API_KEYS = {} # Reset if not valid JSON
+
+print(f"[DEBUG] Parsed VALID_API_KEYS: {VALID_API_KEYS}")
+
+if not VALID_API_KEYS:
+    # This state means either the ENV var was missing, empty, or malformed.
+    # For security, if keys are expected, the system should be restrictive.
+    print("CRITICAL WARNING: VALID_API_KEYS is not configured or is invalid. API key authentication will DENY ALL requests to protected routes.")
+    # Unlike the hardcoded version, if .env is intended, misconfiguration should lead to denial.
+
+def require_api_key(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not VALID_API_KEYS: # If keys are not loaded (e.g. misconfigured .env)
+            print("API Key system not configured properly. Denying access.")
+            return jsonify({"error": "API Key system configuration error"}), 500
+        
+        api_key = request.headers.get('X-API-KEY')
+        if api_key and api_key in VALID_API_KEYS:
+            # Optionally log which client is accessing:
+            # print(f"API access by {VALID_API_KEYS[api_key]} using key {api_key}")
+            return f(*args, **kwargs) # API key is valid, proceed
+        else:
+            print(f"Unauthorized API access attempt. Provided Key: '{api_key}'")
+            return jsonify({"error": "Unauthorized - Invalid or missing API Key"}), 401
+    return decorated_function
 
 # --- DATABASE SETUP ---
 # SessionLocal is a factory for creating database sessions
@@ -124,6 +171,7 @@ def home():
     return "Dread System Server is running!"
 
 @app.route('/api/log_death', methods=['POST'])
+@require_api_key # Protect this route
 def log_death():
     data = request.get_json()
     area_id = data.get('area_id')
@@ -142,7 +190,8 @@ def log_death():
             
             db.commit()
             current_deaths = death_count.death_count # Get after potential creation/update
-            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Death logged in: {area_id}. Total deaths: {current_deaths}")
+            client_name = VALID_API_KEYS.get(request.headers.get('X-API-KEY'), "Unknown Client")
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Death logged in: {area_id}. Total deaths: {current_deaths} by {client_name}")
             return jsonify({"message": f"Death logged for {area_id}", "current_deaths_in_area": current_deaths}), 200
         except IntegrityError as e:
             db.rollback()
@@ -156,6 +205,8 @@ def log_death():
             return jsonify({"error": "An unexpected error occurred."}), 500
 
 @app.route('/api/get_dread_level', methods=['GET'])
+# Not protecting GET for simplicity, can be added if needed by uncommenting:
+# @require_api_key 
 def get_dread_level():
     area_id = request.args.get('area_id')
     if not area_id:
@@ -169,6 +220,7 @@ def get_dread_level():
     return jsonify({"area_id": area_id, "dread_level": level}), 200
 
 @app.route('/api/get_elevated_dread_areas', methods=['GET'])
+# @require_api_key
 def get_elevated_dread_areas():
     with get_db() as db:
         elevated_areas_query = db.query(DreadLevel).filter(DreadLevel.level > 0).all()
@@ -185,6 +237,7 @@ def get_elevated_dread_areas():
 PRE_DEFINED_WORDS = ["danger", "safe", "hidden", "treasure", "monster", "trap", "forward", "back", "help"]
 
 @app.route('/api/leave_note', methods=['POST'])
+@require_api_key # Protect this route
 def leave_note():
     data = request.get_json()
     area_id = data.get('area_id')
@@ -207,7 +260,8 @@ def leave_note():
             db.add(note) # add will become a merge/replace due to the constraint
             db.commit()
             
-            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Note left/updated at {area_id}_{note_location_id}: {word}")
+            client_name = VALID_API_KEYS.get(request.headers.get('X-API-KEY'), "Unknown Client")
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Note left/updated at {area_id}_{note_location_id}: {word} by {client_name}")
             return jsonify({"message": "Note left/updated successfully"}), 200
         except IntegrityError as e: # Should be less likely with REPLACE but good to have
             db.rollback()
@@ -219,6 +273,7 @@ def leave_note():
             return jsonify({"error": "An unexpected error occurred."}), 500
 
 @app.route('/api/get_player_notes', methods=['GET'])
+# @require_api_key
 def get_player_notes():
     area_id = request.args.get('area_id')
     if not area_id:
