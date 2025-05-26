@@ -1,0 +1,65 @@
+# Environment variables
+.env
+
+# Python bytecode and compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+.venv/
+venv/
+ENV/
+
+# SQLite database file (if you want to ignore it, uncomment the line below)
+# dread_system.db
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+#  Usually these files are written by a script PyInstallerFreezeDet.py
+#  andPYINSTALLER_ Archivlink
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*_test
+.cache
+osx_requirements.txt
+
+# Sphinx documentation
+docs/_build/
+
+# PyCharm-related files
+.idea/
+*.iml
+
+# VS Code
+.vscode/ 
