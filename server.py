@@ -181,11 +181,6 @@ def decay_death_counts():
 
 # --- API ENDPOINTS ---
 
-@app.route('/')
-def home():
-    return "Dread System Server is running!"
-
-
 @app.route('/api/log_death', methods=['POST'])
 @require_api_key  # Protect this route
 def log_death():
