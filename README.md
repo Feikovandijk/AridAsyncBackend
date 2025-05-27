@@ -2,23 +2,23 @@ Asyncronous multiplayer experimentation backend for Arid
 
 To get it working, copy .example.env to .env & add secrets.
 
-# Python virtual env
+## Python virtual env
 ```
     sudo apt install python3-venv -y
     python3 -m venv venv 
     source venv/bin/activate
 ```
 
-# Python requirements
+## Python requirements
 ```
     pip install -r requirements.txt
 ```
 
-# Run app (Dev only! Not ready for prod)
+## Run app (Dev only)
 ```
     python3 server.py
 ```
 
-# Future plans
+## Future plans
 - Gunicorn setup for prod
 
