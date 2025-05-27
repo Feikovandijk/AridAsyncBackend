@@ -84,6 +84,7 @@ def get_db():
     finally:
         db.close()
 
+
 # --- CONFIGURATION ---
 DEATH_COUNT_DECAY_FACTOR = 0.95
 DECAY_INTERVAL_SECONDS = 3600
