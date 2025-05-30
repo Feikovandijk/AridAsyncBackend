@@ -21,7 +21,7 @@ CORS(app)
 VALID_API_KEYS_JSON = os.environ.get('VALID_API_KEYS_JSON')
 VALID_API_KEYS = {}  # Default to empty if not set or invalid
 
-print(f"[DEBUG] Initial VALID_API_KEYS_JSON from env: '{VALID_API_KEYS_JSON}'")
+print(f"[DEBUG] Initial VALID_API_KEYS_JSON from env: '{'present' if VALID_API_KEYS_JSON else 'not present'}'")
 
 if VALID_API_KEYS_JSON:
     try:
@@ -39,7 +39,7 @@ if VALID_API_KEYS_JSON:
         )
         VALID_API_KEYS = {}  # Reset if not valid JSON
 
-print(f"[DEBUG] Parsed VALID_API_KEYS: {VALID_API_KEYS}")
+print(f"[DEBUG] Parsed VALID_API_KEYS: {{len(VALID_API_KEYS)}} keys loaded.")
 
 if not VALID_API_KEYS:
     # For security, if keys are expected, the system should be restrictive.
@@ -86,10 +86,10 @@ def require_api_key(f):
 
         if api_key and api_key in VALID_API_KEYS:
             # Optionally log which client is accessing:
-            # print(f"API access by {VALID_API_KEYS[api_key]} using key {api_key}")
+            # print(f"API access by {VALID_API_KEYS[api_key]} using key ending with {api_key[-4:]}") # Example: log last 4 chars
             return f(*args, **kwargs)  # API key is valid, proceed
         else:
-            print(f"Unauthorized API access attempt. Provided Key: '{api_key}' for IP: {client_ip}")
+            print(f"Unauthorized API access attempt. Provided Key length: {len(api_key) if api_key else 0} for IP: {client_ip}")
             # No need to add to request_attempts_by_ip here again, as it was added before the check.
             return jsonify({"error": "Unauthorized - Invalid or missing API Key"}), 401
     return decorated_function
@@ -232,6 +232,7 @@ def log_death():
             db.commit()
             current_deaths = death_count.death_count  # Get after potential creation/update
             client_name = VALID_API_KEYS.get(request.headers.get('X-API-KEY'), "Unknown Client")
+            # Log client name (which is a description from your .env, not the key itself)
             print(
                 f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Death logged in: {area_id}. "
                 f"Total deaths: {current_deaths} by {client_name}"
@@ -309,6 +310,7 @@ def leave_note():
             db.commit()
 
             client_name = VALID_API_KEYS.get(request.headers.get('X-API-KEY'), "Unknown Client")
+            # Log client name (description from .env, not the key itself)
             print(
                 f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Note left/updated at "
                 f"{area_id}_{note_location_id}: {word} by {client_name}"
@@ -401,5 +403,5 @@ if __name__ == '__main__':
 
     scheduler_thread = threading.Thread(target=run_periodic_tasks, daemon=True)
     scheduler_thread.start()
-    print("Starting Flask server with periodic dread calculation task...")
-    app.run(debug=False, host='0.0.0.0', port=5001)
+    print("Starting Flask server with periodic dread calculation task on host 0.0.0.0, port from FLASK_RUN_PORT or default 5001...")
+    app.run(debug=False, host='0.0.0.0', port=int(os.environ.get("FLASK_RUN_PORT", 5001)))

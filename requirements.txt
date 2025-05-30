@@ -3,3 +3,4 @@ flask-cors==4.0.0
 SQLAlchemy==2.0.25
 python-dotenv==1.0.0
 pytest>=7.0.0
+Werkzeug>=3.0.6
