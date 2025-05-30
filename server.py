@@ -53,17 +53,44 @@ if not VALID_API_KEYS:
 def require_api_key(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        # --- Rate Limiting Logic ---
+        client_ip = request.remote_addr
+        current_time = time.time()
+
+        # Clean up old attempts for this IP
+        if client_ip in request_attempts_by_ip:
+            request_attempts_by_ip[client_ip] = [
+                timestamp for timestamp in request_attempts_by_ip[client_ip]
+                if current_time - timestamp < RATE_LIMIT_WINDOW_SECONDS
+            ]
+        else:
+            request_attempts_by_ip[client_ip] = []
+
+        # Check if rate limit exceeded
+        if len(request_attempts_by_ip[client_ip]) >= RATE_LIMIT_ATTEMPTS:
+            print(f"Rate limit exceeded for IP: {client_ip}")
+            # Optionally, add a delay before responding to further deter attackers
+            # time.sleep(1) # Example: 1 second delay
+            return jsonify({"error": "Too Many Requests - Rate limit exceeded"}), 429
+
+        # --- Original API Key Logic ---
         if not VALID_API_KEYS:  # If keys are not loaded (e.g. misconfigured .env)
             print("API Key system not configured properly. Denying access.")
             return jsonify({"error": "API Key system configuration error"}), 500
 
         api_key = request.headers.get('X-API-KEY')
+
+        # Record the attempt *before* checking the key
+        # This ensures failed attempts are also counted towards the rate limit.
+        request_attempts_by_ip[client_ip].append(current_time)
+
         if api_key and api_key in VALID_API_KEYS:
             # Optionally log which client is accessing:
             # print(f"API access by {VALID_API_KEYS[api_key]} using key {api_key}")
             return f(*args, **kwargs)  # API key is valid, proceed
         else:
-            print(f"Unauthorized API access attempt. Provided Key: '{api_key}'")
+            print(f"Unauthorized API access attempt. Provided Key: '{api_key}' for IP: {client_ip}")
+            # No need to add to request_attempts_by_ip here again, as it was added before the check.
             return jsonify({"error": "Unauthorized - Invalid or missing API Key"}), 401
     return decorated_function
 
@@ -88,6 +115,11 @@ DEATH_COUNT_DECAY_FACTOR = 0.95
 DECAY_INTERVAL_SECONDS = 3600
 DREAD_CALCULATION_INTERVAL_SECONDS = 10
 MIN_DEATHS_FOR_DREAD = 1
+
+# --- RATE LIMITING CONFIGURATION ---
+RATE_LIMIT_ATTEMPTS = 10  # Max attempts
+RATE_LIMIT_WINDOW_SECONDS = 60  # Per 60 seconds
+request_attempts_by_ip = {} # Stores IP: [timestamps]
 
 
 # --- DREAD CALCULATION LOGIC ---
