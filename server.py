@@ -42,13 +42,12 @@ if VALID_API_KEYS_JSON:
 print(f"[DEBUG] Parsed VALID_API_KEYS: {VALID_API_KEYS}")
 
 if not VALID_API_KEYS:
-    # This state means either the ENV var was missing, empty, or malformed.
     # For security, if keys are expected, the system should be restrictive.
     print(
         "CRITICAL WARNING: VALID_API_KEYS is not configured or is invalid. "
         "API key authentication will DENY ALL requests to protected routes."
-    )
-    # Unlike the hardcoded version, if .env is intended, misconfiguration should lead to denial.
+    )  
+    
 
 
 def require_api_key(f):
@@ -69,7 +68,6 @@ def require_api_key(f):
     return decorated_function
 
 # --- DATABASE SETUP ---
-# SessionLocal is a factory for creating database sessions
 
 
 # Helper to get a DB session and ensure it's closed
@@ -325,27 +323,31 @@ def run_periodic_tasks():  # noqa: C901
     last_dread_calc_time = time.time()
 
     while True:
-        now = time.time()
         # Use a short sleep to prevent tight looping if an error occurs immediately
-        time.sleep(5)  # Sleep for 5 seconds before checking times
+        # and to serve as the main polling interval for the scheduler.
+        time.sleep(5)
+
+        current_time_for_checks = time.time() # Sample current time after sleeping
 
         try:
-            if now - last_decay_time >= DECAY_INTERVAL_SECONDS:  # Use >= for safety
+            # Check for decay interval first, as it also triggers dread calculation
+            if current_time_for_checks - last_decay_time >= DECAY_INTERVAL_SECONDS:
                 print(
                     f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Triggering decay_death_counts and "
                     f"calculate_and_assign_dread_levels due to decay interval..."
                 )
                 decay_death_counts()
                 calculate_and_assign_dread_levels()
-                last_decay_time = now  # Update time only after successful completion
-                last_dread_calc_time = now  # Reset dread calc time as it ran too
-            elif now - last_dread_calc_time >= DREAD_CALCULATION_INTERVAL_SECONDS:
+                last_decay_time = time.time()  # Update time after successful completion
+                last_dread_calc_time = last_decay_time  # Reset dread calc time as it ran too
+            # If decay didn't run, check for dread calculation interval
+            elif current_time_for_checks - last_dread_calc_time >= DREAD_CALCULATION_INTERVAL_SECONDS:
                 print(
                     f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Triggering calculate_and_assign_dread_levels "
                     f"due to dread calculation interval..."
                 )
                 calculate_and_assign_dread_levels()
-                last_dread_calc_time = now  # Update time only after successful completion
+                last_dread_calc_time = time.time()  # Update time after successful completion
         except Exception as e:
             # Log the error and continue the loop so the scheduler doesn't die
             print(
@@ -355,20 +357,9 @@ def run_periodic_tasks():  # noqa: C901
             # Potentially add a longer sleep here if errors are persistent to avoid spamming logs
             # time.sleep(60) # e.g. wait a minute before retrying loop logic if error occurs
 
-        # The main sleep interval for the loop itself if no tasks were run
-        # Adjust this value as needed, e.g., time.sleep(max(1, DREAD_CALCULATION_INTERVAL_SECONDS / 2))
-        # For now, using the previous 60s if no specific task ran, but the inner sleep(5) dominates for now.
-        if not (now - last_decay_time < DECAY_INTERVAL_SECONDS and
-                now - last_dread_calc_time < DREAD_CALCULATION_INTERVAL_SECONDS):
-            pass  # A task ran, so don't double sleep
-        else:
-            time.sleep(
-                min(
-                    DECAY_INTERVAL_SECONDS - (now - last_decay_time),
-                    DREAD_CALCULATION_INTERVAL_SECONDS - (now - last_dread_calc_time),
-                    60
-                )
-            )
+        # The complex conditional sleep block previously here (lines 352-361 of original)
+        # has been removed. The time.sleep(5) at the top of the loop now solely dictates
+        # the polling frequency of the scheduler.
 
 
 if __name__ == '__main__':
