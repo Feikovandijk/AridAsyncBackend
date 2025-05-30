@@ -1,6 +1,6 @@
 Asyncronous multiplayer experimentation backend for Arid
 
-To get it working, copy .example.env to .env & add secrets.
+Copy .example.env to .env & add secrets.
 
 ## Python virtual env
 ```
