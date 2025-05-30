@@ -73,7 +73,7 @@ def require_api_key(f):
             # time.sleep(1) # Example: 1 second delay
             return jsonify({"error": "Too Many Requests - Rate limit exceeded"}), 429
 
-        # --- Original API Key Logic ---
+        # --- Original API Key Logic --- 
         if not VALID_API_KEYS:  # If keys are not loaded (e.g. misconfigured .env)
             print("API Key system not configured properly. Denying access.")
             return jsonify({"error": "API Key system configuration error"}), 500
@@ -117,8 +117,8 @@ DREAD_CALCULATION_INTERVAL_SECONDS = 10
 MIN_DEATHS_FOR_DREAD = 1
 
 # --- RATE LIMITING CONFIGURATION ---
-RATE_LIMIT_ATTEMPTS = 10  # Max attempts
-RATE_LIMIT_WINDOW_SECONDS = 60  # Per 60 seconds
+RATE_LIMIT_ATTEMPTS = 10  # Max # of attempts
+RATE_LIMIT_WINDOW_SECONDS = 60  # Per # of seconds
 request_attempts_by_ip = {} # Stores IP: [timestamps]
 
 
@@ -280,7 +280,7 @@ def get_elevated_dread_areas():
     return jsonify(result), 200
 
 
-# --- Notes System ---
+""" # --- Notes System ---
 PRE_DEFINED_WORDS = ["danger", "safe", "hidden", "treasure", "monster", "trap", "forward", "back", "help"]
 
 
@@ -335,7 +335,7 @@ def get_player_notes():
         notes_query = db.query(PlayerNote).filter_by(area_id=area_id).all()
     result = [{"location_id": note.note_location_id, "word": note.word} for note in notes_query]
 
-    return jsonify(result), 200
+    return jsonify(result), 200 """
 
 
 # --- PERIODIC TASK SCHEDULER ---
