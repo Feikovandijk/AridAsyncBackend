@@ -7,19 +7,19 @@ from models import SessionLocal, AreaDeathCount, DreadLevel, PlayerNote, create_
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 import contextlib
-from functools import wraps  # For decorator
-import os  # For environment variables
-import json  # For parsing API keys from env
-from dotenv import load_dotenv  # For .env file
+from functools import wraps 
+import os
+import json
+from dotenv import load_dotenv 
 
-load_dotenv()  # Load variables from .env file first
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 
-# --- API Key Authentication (from .env file) ---
+# --- API Key Authentication ---
 VALID_API_KEYS_JSON = os.environ.get('VALID_API_KEYS_JSON')
-VALID_API_KEYS = {}  # Default to empty if not set or invalid
+VALID_API_KEYS = {}
 
 print(f"[DEBUG] Initial VALID_API_KEYS_JSON from env: '{'present' if VALID_API_KEYS_JSON else 'not present'}'")
 
@@ -31,18 +31,17 @@ if VALID_API_KEYS_JSON:
                 "Error: VALID_API_KEYS_JSON in .env did not parse into a dictionary. "
                 "API key auth might not work as expected."
             )
-            VALID_API_KEYS = {}  # Reset if not a dict
+            VALID_API_KEYS = {} 
     except json.JSONDecodeError:
         print(
             "Error: VALID_API_KEYS_JSON in .env is not valid JSON. "
             "API key auth might not work as expected."
         )
-        VALID_API_KEYS = {}  # Reset if not valid JSON
+        VALID_API_KEYS = {} 
 
 print(f"[DEBUG] Parsed VALID_API_KEYS: {{len(VALID_API_KEYS)}} keys loaded.")
 
 if not VALID_API_KEYS:
-    # For security, if keys are expected, the system should be restrictive.
     print(
         "CRITICAL WARNING: VALID_API_KEYS is not configured or is invalid. "
         "API key authentication will DENY ALL requests to protected routes."
@@ -57,7 +56,6 @@ def require_api_key(f):
         client_ip = request.remote_addr
         current_time = time.time()
 
-        # Clean up old attempts for this IP
         if client_ip in request_attempts_by_ip:
             request_attempts_by_ip[client_ip] = [
                 timestamp for timestamp in request_attempts_by_ip[client_ip]
@@ -66,45 +64,34 @@ def require_api_key(f):
         else:
             request_attempts_by_ip[client_ip] = []
 
-        # Check if rate limit exceeded
         if len(request_attempts_by_ip[client_ip]) >= RATE_LIMIT_ATTEMPTS:
             print(f"Rate limit exceeded for IP: {client_ip}")
-            # Optionally, add a delay before responding to further deter attackers
-            # time.sleep(1) # Example: 1 second delay
             return jsonify({"error": "Too Many Requests - Rate limit exceeded"}), 429
 
         # --- Original API Key Logic --- 
-        if not VALID_API_KEYS:  # If keys are not loaded (e.g. misconfigured .env)
+        if not VALID_API_KEYS:
             print("API Key system not configured properly. Denying access.")
             return jsonify({"error": "API Key system configuration error"}), 500
 
         api_key = request.headers.get('X-API-KEY')
-
-        # Record the attempt *before* checking the key
-        # This ensures failed attempts are also counted towards the rate limit.
         request_attempts_by_ip[client_ip].append(current_time)
 
         if api_key and api_key in VALID_API_KEYS:
-            # Optionally log which client is accessing:
-            # print(f"API access by {VALID_API_KEYS[api_key]} using key ending with {api_key[-4:]}") # Example: log last 4 chars
-            return f(*args, **kwargs)  # API key is valid, proceed
+            return f(*args, **kwargs)
         else:
             print(f"Unauthorized API access attempt. Provided Key length: {len(api_key) if api_key else 0} for IP: {client_ip}")
-            # No need to add to request_attempts_by_ip here again, as it was added before the check.
             return jsonify({"error": "Unauthorized - Invalid or missing API Key"}), 401
     return decorated_function
 
 # --- DATABASE SETUP ---
 
-
-# Helper to get a DB session and ensure it's closed
 @contextlib.contextmanager
 def get_db():
     db = SessionLocal()
     try:
         yield db
     except Exception:
-        db.rollback()  # Rollback in case of any exception during the session usage
+        db.rollback()
         raise
     finally:
         db.close()
@@ -117,9 +104,9 @@ DREAD_CALCULATION_INTERVAL_SECONDS = 10
 MIN_DEATHS_FOR_DREAD = 1
 
 # --- RATE LIMITING CONFIGURATION ---
-RATE_LIMIT_ATTEMPTS = 10  # Max # of attempts
-RATE_LIMIT_WINDOW_SECONDS = 60  # Per # of seconds
-request_attempts_by_ip = {} # Stores IP: [timestamps]
+RATE_LIMIT_ATTEMPTS = 10 
+RATE_LIMIT_WINDOW_SECONDS = 60 
+request_attempts_by_ip = {}
 
 
 # --- DREAD CALCULATION LOGIC ---
@@ -178,7 +165,7 @@ def update_or_create_dread_level(db: Session, area_id: str, level: int):
         dread_level.last_updated = datetime.utcnow()
     else:
         db.add(DreadLevel(area_id=area_id, level=level))
-    # Commit will be handled by the calling function (calculate_and_assign_dread_levels)
+
 
 
 def decay_death_counts():
@@ -190,7 +177,7 @@ def decay_death_counts():
                 print("No death counts to decay.")
                 return
 
-            for death_count_obj in death_counts_query:  # Renamed to avoid conflict
+            for death_count_obj in death_counts_query:
                 death_count_obj.death_count = round(death_count_obj.death_count * DEATH_COUNT_DECAY_FACTOR)
                 if death_count_obj.death_count < 1:
                     db.delete(death_count_obj)
@@ -230,9 +217,8 @@ def log_death():
                 db.add(death_count)
 
             db.commit()
-            current_deaths = death_count.death_count  # Get after potential creation/update
+            current_deaths = death_count.death_count  
             client_name = VALID_API_KEYS.get(request.headers.get('X-API-KEY'), "Unknown Client")
-            # Log client name (which is a description from your .env, not the key itself)
             print(
                 f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Death logged in: {area_id}. "
                 f"Total deaths: {current_deaths} by {client_name}"
@@ -241,8 +227,6 @@ def log_death():
         except IntegrityError as e:
             db.rollback()
             print(f"Database integrity error logging death: {e}")
-            # Check if it's a unique constraint on area_id, which shouldn't happen with current logic
-            # but good to be aware of. The primary key ID constraint is more likely here if IDs are mishandled.
             return jsonify({"error": "Database error: Could not log death due to data conflict."}), 500
         except Exception as e:
             db.rollback()
@@ -251,8 +235,6 @@ def log_death():
 
 
 @app.route('/api/get_dread_level', methods=['GET'])
-# Not protecting GET for simplicity, can be added if needed by uncommenting:
-# @require_api_key
 def get_dread_level():
     area_id = request.args.get('area_id')
     if not area_id:
@@ -267,7 +249,7 @@ def get_dread_level():
 
 
 @app.route('/api/get_elevated_dread_areas', methods=['GET'])
-# @require_api_key
+
 def get_elevated_dread_areas():
     with get_db() as db:
         elevated_areas_query = db.query(DreadLevel).filter(DreadLevel.level > 0).all()
@@ -343,13 +325,12 @@ def get_player_notes():
 # --- PERIODIC TASK SCHEDULER ---
 def run_periodic_tasks():  # noqa: C901
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Starting periodic task scheduler...")
-    # Initial calls outside the loop with their own sessions
     try:
         calculate_and_assign_dread_levels()
     except Exception as e:
         print(f"Error in initial dread calculation: {e}")
     try:
-        decay_death_counts()  # Also call decay initially
+        decay_death_counts() 
     except Exception as e:
         print(f"Error in initial death count decay: {e}")
 
@@ -358,13 +339,11 @@ def run_periodic_tasks():  # noqa: C901
 
     while True:
         # Use a short sleep to prevent tight looping if an error occurs immediately
-        # and to serve as the main polling interval for the scheduler.
         time.sleep(5)
 
-        current_time_for_checks = time.time() # Sample current time after sleeping
+        current_time_for_checks = time.time()
 
         try:
-            # Check for decay interval first, as it also triggers dread calculation
             if current_time_for_checks - last_decay_time >= DECAY_INTERVAL_SECONDS:
                 print(
                     f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Triggering decay_death_counts and "
@@ -372,34 +351,24 @@ def run_periodic_tasks():  # noqa: C901
                 )
                 decay_death_counts()
                 calculate_and_assign_dread_levels()
-                last_decay_time = time.time()  # Update time after successful completion
-                last_dread_calc_time = last_decay_time  # Reset dread calc time as it ran too
-            # If decay didn't run, check for dread calculation interval
+                last_decay_time = time.time()
+                last_dread_calc_time = last_decay_time
             elif current_time_for_checks - last_dread_calc_time >= DREAD_CALCULATION_INTERVAL_SECONDS:
                 print(
                     f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Triggering calculate_and_assign_dread_levels "
                     f"due to dread calculation interval..."
                 )
                 calculate_and_assign_dread_levels()
-                last_dread_calc_time = time.time()  # Update time after successful completion
+                last_dread_calc_time = time.time()
         except Exception as e:
-            # Log the error and continue the loop so the scheduler doesn't die
             print(
                 f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] EXCEPTION in periodic task loop: {e}. "
                 f"Attempting to continue..."
             )
-            # Potentially add a longer sleep here if errors are persistent to avoid spamming logs
-            # time.sleep(60) # e.g. wait a minute before retrying loop logic if error occurs
-
-        # The complex conditional sleep block previously here (lines 352-361 of original)
-        # has been removed. The time.sleep(5) at the top of the loop now solely dictates
-        # the polling frequency of the scheduler.
-
 
 if __name__ == '__main__':
-    # Ensure the database and tables are created before starting
     print("Ensuring database and tables are created if they don't exist...")
-    create_db_and_tables()  # Call the new function
+    create_db_and_tables()
 
     scheduler_thread = threading.Thread(target=run_periodic_tasks, daemon=True)
     scheduler_thread.start()
